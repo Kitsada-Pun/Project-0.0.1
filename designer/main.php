@@ -28,7 +28,7 @@ $designer_name = $_SESSION['username'] ?? $_SESSION['full_name']; // ใช้ f
 
 // --- PHP Logic สำหรับดึงงานที่นักออกแบบได้รับมอบหมาย หรือ งานที่น่าสนใจสำหรับนักออกแบบ ---
 $assigned_jobs = [];
-// ตัวอย่าง: ดึงงานที่ 'designer' ได้รับมอบหมาย (สถานะ 'in_progress', 'completed')
+// ตัวอย่าง: ดึงงานที่ 'designer' ได้รับมอบหมาย (สถานะ 'in_progress', 'pending_review')
 $sql_assigned_jobs = "SELECT
                             jp.post_id,
                             jp.title,
@@ -321,35 +321,35 @@ $condb->close();
 <body class="bg-gray-100 min-h-screen flex flex-col">
 
     <nav class="navbar p-4 shadow-md sticky top-0 z-50">
-    <div class="container mx-auto flex justify-between items-center">
-        <a href="main.php" class="transition duration-300 hover:opacity-80">
-            <img src="../dist/img/logo.png" alt="PixelLink Logo" class="h-12">
-        </a>
-        <div class="space-x-2 sm:space-x-4 flex items-center">
-            <span class="text-gray-700 font-medium">สวัสดี, <?= htmlspecialchars($designer_name) ?>!</span>
-
-            <a href="view_profile.php?user_id=<?php echo $_SESSION['user_id']; ?>" class="
-                bg-blue-500 text-white
-                px-3 py-1.5 sm:px-5 sm:py-2
-                rounded-lg font-medium
-                shadow-md hover:shadow-lg hover:scale-105 transition-all duration-300
-                focus:outline-none focus:ring-2 focus:ring-blue-300
-            ">
-                <i class="fas fa-user-circle mr-1"></i> ดูโปรไฟล์
+        <div class="container mx-auto flex justify-between items-center">
+            <a href="main.php" class="transition duration-300 hover:opacity-80">
+                <img src="../dist/img/logo.png" alt="PixelLink Logo" class="h-12">
             </a>
+            <div class="space-x-2 sm:space-x-4 flex items-center">
+                <span class="text-gray-700 font-medium">สวัสดี, <?= htmlspecialchars($designer_name) ?>!</span>
 
-            <a href="../logout.php" class="
-                bg-red-500 text-white
-                px-3 py-1.5 sm:px-5 sm:py-2
-                rounded-lg font-medium
-                shadow-md hover:shadow-lg hover:scale-105 transition-all duration-300
-                focus:outline-none focus:ring-2 focus:ring-red-300
-            ">
-                <i class="fas fa-sign-out-alt mr-1"></i> ออกจากระบบ
-            </a>
+                <a href="view_profile.php?user_id=<?php echo $_SESSION['user_id']; ?>" class="
+                    bg-blue-500 text-white
+                    px-3 py-1.5 sm:px-5 sm:py-2
+                    rounded-lg font-medium
+                    shadow-md hover:shadow-lg hover:scale-105 transition-all duration-300
+                    focus:outline-none focus:ring-2 focus:ring-blue-300
+                ">
+                    <i class="fas fa-user-circle mr-1"></i> ดูโปรไฟล์
+                </a>
+
+                <a href="../logout.php" class="
+                    bg-red-500 text-white
+                    px-3 py-1.5 sm:px-5 sm:py-2
+                    rounded-lg font-medium
+                    shadow-md hover:shadow-lg hover:scale-105 transition-all duration-300
+                    focus:outline-none focus:ring-2 focus:ring-red-300
+                ">
+                    <i class="fas fa-sign-out-alt mr-1"></i> ออกจากระบบ
+                </a>
+            </div>
         </div>
-    </div>
-</nav>
+    </nav>
 
     <header class="hero-section flex-grow flex items-center justify-center text-white py-16 relative overflow-hidden">
         <div class="absolute inset-0 bg-cover bg-center" style="background-image: url('../dist/img/cover.png');">
@@ -364,35 +364,48 @@ $condb->close();
             </p>
             <div class="space-x-0 sm:space-x-4 flex flex-col sm:flex-row justify-center items-center">
                 <a href="#available-jobs" class="
-                bg-emerald-500 text-white
-                px-6 py-3 sm:px-8 sm:py-4
-                text-base sm:text-lg rounded-lg font-semibold
-                shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300
-                w-full sm:w-auto mb-3 sm:mb-0
-                hover:bg-emerald-600 focus:outline-none focus:ring-4 focus:ring-emerald-300
-            ">
-                    หางานใหม่ <i class="fas fa-search ml-2"></i>
+                    bg-emerald-500 text-white
+                    px-6 py-3 sm:px-8 sm:py-4
+                    text-base sm:text-lg rounded-lg font-semibold
+                    shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300
+                    w-full sm:w-auto mb-3 sm:mb-0
+                    hover:bg-emerald-600 focus:outline-none focus:ring-4 focus:ring-emerald-300
+                    whitespace-nowrap 
+                ">
+                    <i class="fas fa-tasks mr-2"></i> หางานใหม่
                 </a>
                 <a href="my_projects.php" class="
-                bg-blue-500 text-white
-                px-6 py-3 sm:px-8 sm:py-4
-                text-base sm:text-lg rounded-lg font-semibold
-                shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300
-                w-full sm:w-auto mb-3 sm:mb-0
-                hover:bg-blue-600 focus:outline-none focus:ring-4 focus:ring-blue-300
-            ">
-                    โปรเจกต์ของฉัน <i class="fas fa-folder-open ml-2"></i>
+                    bg-blue-500 text-white
+                    px-6 py-3 sm:px-8 sm:py-4
+                    text-base sm:text-lg rounded-lg font-semibold
+                    shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300
+                    w-full sm:w-auto mb-3 sm:mb-0
+                    hover:bg-blue-600 focus:outline-none focus:ring-4 focus:ring-blue-300
+                    whitespace-nowrap
+                ">
+                    <i class="fas fa-search ml-2"></i> โปรเจกต์ของคุณ
                 </a>
                 <a href="post_portfolio.php" class="
-                bg-gray-200 text-gray-800
-                px-6 py-3 sm:px-8 sm:py-4
-                text-base sm:text-lg rounded-lg font-semibold
-                shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300
-                w-full sm:w-auto
-                hover:bg-gray-300 focus:outline-none focus:ring-4 focus:ring-gray-300
-            ">
-                    ประกาศผลงาน <i class="fas fa-upload ml-2"></i>
-                    
+                    bg-gray-200 text-gray-800
+                    px-6 py-3 sm:px-8 sm:py-4
+                    text-base sm:text-lg rounded-lg font-semibold
+                    shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300
+                    w-full sm:w-auto mb-3 sm:mb-0
+                    hover:bg-gray-300 focus:outline-none focus:ring-4 focus:ring-gray-300
+                    whitespace-nowrap
+                ">
+                    <i class="fas fa-upload ml-2"></i> แชร์ผลงานของคุณ
+                </a>
+                <a href="create_job_post.php" class="
+                    bg-indigo-600 text-white
+                    px-6 py-3 sm:px-8 sm:py-4
+                    text-base sm:text-lg rounded-lg font-semibold
+                    shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300
+                    w-full sm:w-auto
+                    hover:bg-indigo-700 focus:outline-none focus:ring-4 focus:ring-indigo-300
+                    whitespace-nowrap
+                ">
+                    <i class="fas fa-plus-circle mr-2"></i> สร้างโพสต์งานของคุณ
                 </a>
             </div>
         </div>

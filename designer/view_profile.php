@@ -2,10 +2,7 @@
 session_start();
 date_default_timezone_set('Asia/Bangkok');
 
-// ตรวจสอบว่าผู้ใช้ล็อกอินอยู่หรือไม่ และเป็น 'designer'
-// (ข้อสังเกต: หน้านี้ควรเข้าถึงได้โดย user_type ใดก็ได้หากเป็นแค่การดูโปรไฟล์)
-// หากต้องการให้เฉพาะ designer ดูโปรไฟล์ได้เท่านั้น ให้คงเงื่อนไขนี้ไว้
-// หากต้องการให้ user_type ใดๆ ก็ตามดูโปรไฟล์ได้ ให้ลบเงื่อนไข $_SESSION['user_type'] !== 'designer' ออก
+// ตรวจสอบว่าผู้ใช้ล็อกอินอยู่หรือไม่
 if (!isset($_SESSION['user_id'])) {
     // ถ้าไม่ได้ล็อกอิน ให้เปลี่ยนเส้นทางไปหน้า login
     header("Location: ../login.php");
@@ -29,11 +26,36 @@ $condb->set_charset("utf8mb4");
 $user_id_to_view = isset($_GET['user_id']) ? intval($_GET['user_id']) : 0;
 
 $profile_data = null;
-$user_data = null;
+
+// ตรวจสอบข้อมูลผู้ใช้ที่เข้าสู่ระบบสำหรับ Navbar
+$loggedInUserName = '';
+if (isset($_SESSION['user_id'])) {
+    $loggedInUserName = $_SESSION['username'] ?? $_SESSION['full_name'] ?? '';
+    // Fallback ดึงจากฐานข้อมูลหาก session ไม่มีข้อมูล
+    if (empty($loggedInUserName)) {
+        $user_id_session = $_SESSION['user_id'];
+        $sql_loggedInUser = "SELECT first_name, last_name FROM users WHERE user_id = ?";
+        $stmt_loggedInUser = $condb->prepare($sql_loggedInUser);
+        if ($stmt_loggedInUser) {
+            $stmt_loggedInUser->bind_param("i", $user_id_session);
+            $stmt_loggedInUser->execute();
+            $result_loggedInUser = $stmt_loggedInUser->get_result();
+            if ($result_loggedInUser->num_rows === 1) {
+                $user_info = $result_loggedInUser->fetch_assoc();
+                $loggedInUserName = $user_info['first_name'] . ' ' . $user_info['last_name'];
+                // บันทึกกลับเข้า session เพื่อใช้ในอนาคต
+                $_SESSION['first_name'] = $user_info['first_name'];
+                $_SESSION['last_name'] = $user_info['last_name'];
+                $_SESSION['full_name'] = $loggedInUserName;
+            }
+            $stmt_loggedInUser->close();
+        }
+    }
+}
+
 
 if ($user_id_to_view > 0) {
     // ดึงข้อมูลโปรไฟล์จากตาราง 'profiles' และ 'users'
-    $available_jobs = [];
     $sql_profile = "SELECT
                         p.address,
                         p.company_name,
@@ -50,34 +72,6 @@ if ($user_id_to_view > 0) {
                     JOIN users AS u ON p.user_id = u.user_id
                     WHERE p.user_id = ?";
 
-
-    $sql_available_jobs = "SELECT
-                                jp.post_id,
-                                jp.title,
-                                jp.description,
-                                jp.price_range,
-                                jp.posted_date,
-                                u.first_name,
-                                u.last_name,
-                                jc.category_name
-                            FROM job_postings AS jp
-                            JOIN users AS u ON jp.designer_id = u.user_id -- หรือ client_id ถ้าโพสต์โดยลูกค้า
-                            LEFT JOIN job_categories AS jc ON jp.category_id = jc.category_id
-                            WHERE jp.status = 'active'
-                            ORDER BY RAND()
-                            LIMIT 12";
-
-
-    $stmt_available_jobs = $condb->prepare($sql_available_jobs);
-    if ($stmt_available_jobs === false) {
-        error_log("SQL Prepare Error (available_jobs): " . $condb->error);
-    } else {
-        $stmt_available_jobs->execute();
-        $result_available_jobs = $stmt_available_jobs->get_result();
-        $available_jobs = $result_available_jobs->fetch_all(MYSQLI_ASSOC);
-        $stmt_available_jobs->close();
-    }
-
     $stmt_profile = $condb->prepare($sql_profile);
     if ($stmt_profile === false) {
         error_log("SQL Prepare Error (profile): " . $condb->error);
@@ -89,16 +83,49 @@ if ($user_id_to_view > 0) {
         $profile_data = $result_profile->fetch_assoc();
         $stmt_profile->close();
     }
+
+    // --- PHP Logic สำหรับดึงงานที่ผู้ใช้งานที่กำลังดูโปรไฟล์เป็นผู้ประกาศ (ผลงานของฉัน) ---
+    $job_postings_for_profile = []; // เปลี่ยนชื่อตัวแปรจาก available_jobs เพื่อให้ชัดเจนและไม่ซ้ำกับตัวแปรหลักอื่น
+    $sql_job_postings_for_profile = "SELECT
+                                jp.post_id,
+                                jp.title,
+                                jp.description,
+                                jp.price_range,
+                                jp.posted_date,
+                                u.first_name,
+                                u.last_name,
+                                jc.category_name
+                            FROM job_postings AS jp
+                            JOIN users AS u ON jp.designer_id = u.user_id 
+                            LEFT JOIN job_categories AS jc ON jp.category_id = jc.category_id
+                            WHERE jp.designer_id = ? AND jp.status = 'active'
+                            ORDER BY jp.posted_date DESC"; // เรียงตามวันที่โพสต์ล่าสุด
+
+    $stmt_job_postings_for_profile = $condb->prepare($sql_job_postings_for_profile);
+    if ($stmt_job_postings_for_profile === false) {
+        error_log("SQL Prepare Error (job_postings_for_profile): " . $condb->error);
+    } else {
+        $stmt_job_postings_for_profile->bind_param("i", $user_id_to_view); // ผูก user_id_to_view
+        $stmt_job_postings_for_profile->execute();
+        $result_job_postings_for_profile = $stmt_job_postings_for_profile->get_result();
+        $job_postings_for_profile = $result_job_postings_for_profile->fetch_all(MYSQLI_ASSOC);
+        $stmt_job_postings_for_profile->close();
+    }
+
+} else {
+    // หาก user_id ไม่ได้ระบุใน URL หรือเป็น 0, ให้ถือว่าไม่พบโปรไฟล์
+    $profile_data = null; 
 }
 
 $condb->close();
 
 // กำหนดค่าเริ่มต้นสำหรับข้อมูลที่จะแสดงผล
+// ใช้ ?? '' สำหรับค่าว่าง เพื่อป้องกัน Warning หาก key ไม่มีอยู่
 $display_name = trim(($profile_data['user_first_name'] ?? '') . ' ' . ($profile_data['user_last_name'] ?? '')) ?: ($profile_data['username_from_users'] ?? 'ไม่ระบุชื่อ');
 
 $display_email = $profile_data['user_email'] ?? 'ไม่ระบุอีเมล';
 $display_tel = $profile_data['user_tel'] ?? 'ไม่ระบุเบอร์โทรศัพท์';
-$display_rating = 'ยังไม่มีคะแนน';
+$display_rating = 'ยังไม่มีคะแนน'; // ต้องดึงคะแนนรีวิวจาก DB
 $display_address = $profile_data['address'] ?? 'ไม่ระบุที่อยู่';
 $display_company_name = $profile_data['company_name'] ?? 'ไม่ระบุบริษัท';
 $display_bio = $profile_data['profile_bio'] ?? 'ยังไม่มีประวัติ';
@@ -127,8 +154,7 @@ $display_profile_pic = $profile_data['profile_pic_from_profiles'] ?? '../dist/im
         body {
             background: linear-gradient(135deg, #f0f4f8 0%, #e8edf3 100%);
             color: #2c3e50;
-            overflow-x: hidden;
-            /* Added to ensure no horizontal scroll on body */
+            overflow-x: hidden; /* Added to ensure no horizontal scroll on body */
         }
 
         .navbar {
@@ -199,70 +225,6 @@ $display_profile_pic = $profile_data['profile_pic_from_profiles'] ?? '../dist/im
             text-align: center;
         }
 
-        /* Style block moved and consolidated */
-        * {
-            font-family: 'Kanit', sans-serif;
-            font-style: normal;
-            font-weight: 400;
-        }
-
-        body {
-            background: linear-gradient(135deg, #f0f4f8 0%, #e8edf3 100%);
-            color: #2c3e50;
-            overflow-x: hidden;
-        }
-
-        .navbar {
-            background-color: rgba(255, 255, 255, 0.9);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-        }
-
-        .btn-primary {
-            background: linear-gradient(45deg, #0a5f97 0%, #0d96d2 100%);
-            color: white;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 15px rgba(13, 150, 210, 0.3);
-        }
-
-        .btn-primary:hover {
-            background: linear-gradient(45deg, #0d96d2 0%, #0a5f97 100%);
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(13, 150, 210, 0.5);
-        }
-
-        .btn-secondary {
-            background-color: #6c757d;
-            color: white;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 10px rgba(108, 117, 125, 0.2);
-        }
-
-        .btn-secondary:hover {
-            background-color: #5a6268;
-            transform: translateY(-2px);
-            box-shadow: 0 6px 15px rgba(108, 117, 125, 0.4);
-        }
-
-        .text-gradient {
-            background: linear-gradient(45deg, #0a5f97, #0d96d2);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-
-        .pixellink-logo {
-            font-weight: 700;
-            font-size: 2.25rem;
-            background: linear-gradient(45deg, #0a5f97, #0d96d2);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-
-        .pixellink-logo b {
-            color: #0d96d2;
-        }
-
         .card-item {
             background: rgba(255, 255, 255, 0.9);
             backdrop-filter: blur(8px);
@@ -274,9 +236,8 @@ $display_profile_pic = $profile_data['profile_pic_from_profiles'] ?? '../dist/im
             flex-direction: column;
             justify-content: space-between;
             border: 1px solid rgba(0, 0, 0, 0.05);
-            /* For carousel, ensure cards don't shrink */
             flex-shrink: 0;
-            /* Adjust as needed */
+            /* REMOVED fixed width: width: 300px; */
         }
 
         .card-item:hover {
@@ -286,8 +247,8 @@ $display_profile_pic = $profile_data['profile_pic_from_profiles'] ?? '../dist/im
 
         .card-image {
             width: 100%;
-            height: 200px;
-            object-fit: cover;
+            aspect-ratio: 16/9; /* Maintain 16:9 aspect ratio */
+            object-fit: cover; /* Cover the area, cropping if necessary */
             border-top-left-radius: 1rem;
             border-top-right-radius: 1rem;
         }
@@ -301,47 +262,47 @@ $display_profile_pic = $profile_data['profile_pic_from_profiles'] ?? '../dist/im
             transform: translateY(-3px);
         }
 
-        /* New styles for carousel */
+        /* Carousel Styles */
         .carousel-container {
             position: relative;
             display: flex;
             align-items: center;
+            padding: 0 2rem; /* Add padding to make space for buttons */
         }
 
         .carousel-content {
             display: grid;
-            grid-auto-flow: column;
-            /* Allows items to flow horizontally */
-            grid-auto-columns: 100%;
-            /* Each slide takes 100% of the container width */
-            gap: 1.5rem;
-            /* Gap between cards */
-            overflow: hidden;
-            /* Hide overflowing items */
-            scroll-behavior: smooth;
-            /* Smooth scrolling effect */
+            grid-auto-flow: column; /* Allows items to flow horizontally */
+            /* grid-auto-columns: 100%; /* Each slide takes 100% of the container width (เดิม) */
+            gap: 1.5rem; /* Gap between cards */
+            overflow-x: scroll; /* Enable horizontal scrolling */
+            scroll-behavior: smooth; /* Smooth scrolling effect */
             -webkit-overflow-scrolling: touch;
             flex-grow: 1;
-            /* Allow content to take available space */
+            /* Hide scrollbar */
+            scrollbar-width: none; /* Firefox */
+            -ms-overflow-style: none;  /* IE and Edge */
         }
 
-        /* Adjust grid-auto-columns for multiple cards visible */
+        /* Hide scrollbar for Chrome, Safari, Opera */
+        .carousel-content::-webkit-scrollbar {
+            display: none;
+        }
+
+        /* Adjust grid-auto-columns for multiple cards visible (now truly controls width) */
         @media (min-width: 768px) {
             .carousel-content {
                 /* For medium screens and up, show 2 cards with a gap */
-                grid-auto-columns: calc(50% - 0.75rem);
-                /* 50% width minus half the gap */
+                grid-auto-columns: calc(50% - 0.75rem); /* 50% width minus half the gap */
             }
         }
 
         @media (min-width: 1024px) {
             .carousel-content {
                 /* For large screens and up, show 3 cards with gaps */
-                grid-auto-columns: calc(33.333% - 1rem);
-                /* 33.333% width minus 2/3 of the gap */
+                grid-auto-columns: calc(33.333% - 1rem); /* 33.333% width minus 2/3 of the gap */
             }
         }
-
 
         .carousel-button {
             background-color: rgba(0, 0, 0, 0.5);
@@ -350,14 +311,17 @@ $display_profile_pic = $profile_data['profile_pic_from_profiles'] ?? '../dist/im
             padding: 0.75rem 0.5rem;
             cursor: pointer;
             z-index: 10;
-            border-radius: 9999px;
-            /* Fully rounded */
+            border-radius: 9999px; /* Fully rounded */
             position: absolute;
-            /* Position relative to .carousel-container */
             top: 50%;
             transform: translateY(-50%);
-            transition: background-color 0.3s ease, transform 0.3s ease;
+            transition: background-color 0.3s ease, opacity 0.3s ease;
             opacity: 0.8;
+            width: 2.5rem; /* Fixed width for consistent button size */
+            height: 2.5rem; /* Fixed height for consistent button size */
+            display: flex;
+            justify-content: center;
+            align-items: center;
         }
 
         .carousel-button:hover {
@@ -366,13 +330,11 @@ $display_profile_pic = $profile_data['profile_pic_from_profiles'] ?? '../dist/im
         }
 
         .carousel-button.left {
-            left: -3rem;
-            /* Position outside the container slightly */
+            left: 0;
         }
 
         .carousel-button.right {
-            right: -3rem;
-            /* Position outside the container slightly */
+            right: 0;
         }
 
         /* Responsive adjustments */
@@ -426,7 +388,7 @@ $display_profile_pic = $profile_data['profile_pic_from_profiles'] ?? '../dist/im
             }
 
             .card-image {
-                height: 160px;
+                height: auto; /* Allow auto height with aspect ratio */
             }
 
             .flex-col.sm\:flex-row {
@@ -448,11 +410,11 @@ $display_profile_pic = $profile_data['profile_pic_from_profiles'] ?? '../dist/im
 
             /* Adjust carousel buttons for small screens */
             .carousel-button.left {
-                left: 1.5rem;
+                left: 0.5rem;
             }
 
             .carousel-button.right {
-                right: 1.5rem;
+                right: 0.5rem;
             }
         }
 
@@ -502,32 +464,38 @@ $display_profile_pic = $profile_data['profile_pic_from_profiles'] ?? '../dist/im
 
     <nav class="navbar p-4 shadow-md sticky top-0 z-50">
         <div class="container mx-auto flex justify-between items-center">
-            <a href="main.php" class="transition duration-300 hover:opacity-80">
+            <a href="../designer/main.php" class="transition duration-300 hover:opacity-80">
                 <img src="../dist/img/logo.png" alt="PixelLink Logo" class="h-12">
             </a>
             <div class="space-x-2 sm:space-x-4 flex items-center">
-                <span class="text-gray-700 font-medium">สวัสดี,
-                    <?= htmlspecialchars($_SESSION['username'] ?? $_SESSION['full_name']) ?>!</span>
+                <?php if (isset($_SESSION['user_id'])) : ?>
+                    <span class="text-gray-700 font-medium">สวัสดี, <?= htmlspecialchars($loggedInUserName) ?>!</span>
 
-                <a href="view_profile.php?user_id=<?php echo $_SESSION['user_id']; ?>" class="
-                    bg-blue-500 text-white
-                    px-3 py-1.5 sm:px-5 sm:py-2
-                    rounded-lg font-medium
-                    shadow-md hover:shadow-lg hover:scale-105 transition-all duration-300
-                    focus:outline-none focus:ring-2 focus:ring-blue-300
-                ">
-                    <i class="fas fa-user-circle mr-1"></i> ดูโปรไฟล์
-                </a>
+                    <a href="view_profile.php?user_id=<?php echo $_SESSION['user_id']; ?>" class="
+                        bg-blue-500 text-white
+                        px-3 py-1.5 sm:px-5 sm:py-2
+                        rounded-lg font-medium
+                        shadow-md hover:shadow-lg hover:scale-105 transition-all duration-300
+                        focus:outline-none focus:ring-2 focus:ring-blue-300
+                    ">
+                        <i class="fas fa-user-circle mr-1"></i> ดูโปรไฟล์
+                    </a>
 
-                <a href="../logout.php" class="
-                bg-red-500 text-white
-                px-3 py-1.5 sm:px-5 sm:py-2
-                rounded-lg font-medium
-                shadow-md hover:shadow-lg hover:scale-105 transition-all duration-300
-                focus:outline-none focus:ring-2 focus:ring-red-300
-            ">
-                    <i class="fas fa-sign-out-alt mr-1"></i> ออกจากระบบ
-                </a>
+                    <a href="../logout.php" class="
+                        bg-red-500 text-white
+                        px-3 py-1.5 sm:px-5 sm:py-2
+                        rounded-lg font-medium
+                        shadow-md hover:shadow-lg hover:scale-105 transition-all duration-300
+                        focus:outline-none focus:ring-2 focus:ring-red-300
+                    ">
+                        <i class="fas fa-sign-out-alt mr-1"></i> ออกจากระบบ
+                    </a>
+                <?php else : ?>
+                    <a href="../login.php"
+                        class="px-5 py-2 rounded-lg font-semibold border-2 border-transparent hover:border-blue-500 hover:text-blue-500 transition duration-300">เข้าสู่ระบบ</a>
+                    <a href="../register.php"
+                        class="btn-primary px-5 py-2 rounded-lg font-semibold shadow-lg">สมัครสมาชิก</a>
+                <?php endif; ?>
             </div>
         </div>
     </nav>
@@ -596,7 +564,7 @@ $display_profile_pic = $profile_data['profile_pic_from_profiles'] ?? '../dist/im
 
                 <?php if ($display_portfolio_url): ?>
                     <div class="mb-8">
-                        <h2 class="text-2xl font-semibold text-gradient mb-4">พอร์ตโฟลิโอ</h2>
+                        <h2 class="text-2xl font-semibold text-gradient mb-4">แชร์ผลงานของคุณ</h2>
                         <p class="text-gray-700">
                             <i class="fas fa-link mr-2"></i><a href="<?= htmlspecialchars($display_portfolio_url) ?>"
                                 target="_blank" class="text-blue-600 hover:underline break-words">
@@ -621,13 +589,13 @@ $display_profile_pic = $profile_data['profile_pic_from_profiles'] ?? '../dist/im
                 <?php endif; ?>
 
                 <div class="mb-8">
-                    <h2 class="text-2xl font-semibold text-gradient mb-1">ประกาศงานของฉัน</h2>
+                    <h2 class="text-2xl font-semibold text-gradient mb-1">โพสประกาศงานของคุณ</h2>
                     <section id="available-jobs" class="py-4 md:py-6 bg-white">
                         <div class="container mx-auto px-4 md:px-6">
-                            <?php if (empty($available_jobs)): ?>
+                            <?php if (empty($job_postings_for_profile)): /* ใช้ตัวแปรที่แก้ไขชื่อแล้ว */ ?>
                                 <div
                                     class="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded-lg relative text-center">
-                                    <span class="block sm:inline">ยังไม่มีงานที่เปิดรับในขณะนี้</span>
+                                    <span class="block sm:inline">ยังไม่มีงานที่แสดงในขณะนี้</span>
                                 </div>
                             <?php else: ?>
                                 <div class="carousel-container relative">
@@ -636,7 +604,7 @@ $display_profile_pic = $profile_data['profile_pic_from_profiles'] ?? '../dist/im
                                     </button>
 
                                     <div class="carousel-content" id="carouselContent">
-                                        <?php foreach ($available_jobs as $job): ?>
+                                        <?php foreach ($job_postings_for_profile as $job): /* ใช้ตัวแปรที่แก้ไขชื่อแล้ว */ ?>
                                             <div class="card-item animate-card-appear">
                                                 <img src="https://source.unsplash.com/400x250/?creative-design,<?= urlencode($job['category_name'] ?? 'web-design') ?>"
                                                     alt="งานที่เปิดรับ: <?= htmlspecialchars($job['title']) ?>" class="card-image"
@@ -683,13 +651,14 @@ $display_profile_pic = $profile_data['profile_pic_from_profiles'] ?? '../dist/im
                         </div>
                     </section>
                 </div>
-            <?php endif; ?>
+            </div>
+        <?php endif; ?>
     </main>
 
     <footer class="bg-gray-900 text-gray-300 py-8 mt-auto">
         <div class="container mx-auto px-4 md:px-6 text-center">
             <div class="flex flex-col md:flex-row justify-between items-center mb-6">
-                <a href="main.php"
+                <a href="../designer/main.php"
                     class="text-2xl sm:text-3xl font-bold pixellink-logo mb-4 md:mb-0 transition duration-300 hover:opacity-80">Pixel<b>Link</b></a>
                 <div class="flex flex-wrap justify-center space-x-2 md:space-x-6 text-sm md:text-base footer-links">
                     <a href="#"
@@ -706,12 +675,18 @@ $display_profile_pic = $profile_data['profile_pic_from_profiles'] ?? '../dist/im
         </div>
     </footer>
 
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
-        document.addEventListener('DOMContentLoaded', function () {
+        document.addEventListener('DOMContentLoaded', function() {
             const carouselContent = document.getElementById('carouselContent');
             const prevBtn = document.getElementById('prevBtn');
             const nextBtn = document.getElementById('nextBtn');
-            const cardItems = carouselContent.querySelectorAll('.card-item');
+            // Check if elements exist before trying to query children
+            const cardItems = carouselContent ? carouselContent.querySelectorAll('.card-item') : [];
+
+
+            let scrollInterval; // To store the interval ID for continuous scrolling
+            const scrollAmount = 200; // Amount to scroll per interval
 
             if (!carouselContent || cardItems.length === 0) {
                 // Hide buttons if no content or carousel not found
@@ -720,47 +695,81 @@ $display_profile_pic = $profile_data['profile_pic_from_profiles'] ?? '../dist/im
                 return;
             }
 
-            // Initially hide previous button if at the beginning
-            prevBtn.style.display = 'none';
+            // Function to update button visibility based on scroll position
+            function updateButtonVisibility() {
+                // A small tolerance is added due to potential sub-pixel rendering issues
+                const tolerance = 5;
 
-            nextBtn.addEventListener('click', () => {
-                const scrollAmount = carouselContent.clientWidth; // Scroll by the width of the container
-                carouselContent.scrollBy({
-                    left: scrollAmount,
-                    behavior: 'smooth'
-                });
-                // Show previous button
-                prevBtn.style.display = 'block';
-            });
-
-            prevBtn.addEventListener('click', () => {
-                const scrollAmount = carouselContent.clientWidth; // Scroll by the width of the container
-                carouselContent.scrollBy({
-                    left: -scrollAmount,
-                    behavior: 'smooth'
-                });
-            });
-
-            carouselContent.addEventListener('scroll', () => {
-                // Check if at the beginning or end to toggle button visibility
-                if (carouselContent.scrollLeft === 0) {
+                if (carouselContent.scrollLeft <= tolerance) { // Check if at the very beginning
                     prevBtn.style.display = 'none';
                 } else {
-                    prevBtn.style.display = 'block';
+                    prevBtn.style.display = 'flex'; // Use 'flex' to maintain center alignment of icon
                 }
 
-                // A small tolerance is added due to potential sub-pixel rendering issues
-                if (carouselContent.scrollLeft + carouselContent.clientWidth >= carouselContent.scrollWidth - 5) {
+                if (carouselContent.scrollLeft + carouselContent.clientWidth >= carouselContent.scrollWidth - tolerance) {
                     nextBtn.style.display = 'none';
                 } else {
-                    nextBtn.style.display = 'block';
+                    nextBtn.style.display = 'flex'; // Use 'flex'
                 }
+
+                // If content is not scrollable at all, hide both
+                if (carouselContent.scrollWidth <= carouselContent.clientWidth + tolerance) {
+                    prevBtn.style.display = 'none';
+                    nextBtn.style.display = 'none';
+                }
+            }
+
+            // Event listeners for "Next" button for press and hold
+            nextBtn.addEventListener('mousedown', () => {
+                clearInterval(scrollInterval); // Clear any existing interval to prevent multiple intervals
+                scrollInterval = setInterval(() => {
+                    carouselContent.scrollBy({
+                        left: scrollAmount,
+                        behavior: 'smooth'
+                    });
+                    // Update visibility immediately after scroll to ensure responsiveness
+                    updateButtonVisibility();
+                }, 100); // Scroll every 100 milliseconds
             });
 
-            // Initial check for next button visibility if content is scrollable
-            if (carouselContent.scrollWidth <= carouselContent.clientWidth) {
-                nextBtn.style.display = 'none';
-            }
+            // Stop scrolling when mouse button is released or mouse leaves the button
+            nextBtn.addEventListener('mouseup', () => {
+                clearInterval(scrollInterval);
+            });
+            nextBtn.addEventListener('mouseleave', () => {
+                clearInterval(scrollInterval);
+            });
+
+            // Event listeners for "Previous" button for press and hold
+            prevBtn.addEventListener('mousedown', () => {
+                clearInterval(scrollInterval); // Clear any existing interval
+                scrollInterval = setInterval(() => {
+                    carouselContent.scrollBy({
+                        left: -scrollAmount,
+                        behavior: 'smooth'
+                    });
+                    // Update visibility immediately after scroll
+                    updateButtonVisibility();
+                }, 100); // Scroll every 100 milliseconds
+            });
+
+            // Stop scrolling when mouse button is released or mouse leaves the button
+            prevBtn.addEventListener('mouseup', () => {
+                clearInterval(scrollInterval);
+            });
+            prevBtn.addEventListener('mouseleave', () => {
+                clearInterval(scrollInterval);
+            });
+
+            // Listen for actual scroll events to ensure button visibility is always accurate
+            // This handles cases where scrolling might occur due to other means (e.g., trackpad, keyboard)
+            carouselContent.addEventListener('scroll', updateButtonVisibility);
+
+            // Initial check on load
+            updateButtonVisibility();
+
+            // Re-check on window resize to adjust button visibility for responsive layout changes
+            window.addEventListener('resize', updateButtonVisibility);
         });
     </script>
 </body>
