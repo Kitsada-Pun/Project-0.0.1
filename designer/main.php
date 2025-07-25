@@ -200,6 +200,18 @@ $condb->close();
             transform: translateY(-3px);
         }
 
+        /* Added new animation classes for main content fade-in */
+        .fade-in-slide-up {
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity 0.8s ease-out, transform 0.8s ease-out;
+        }
+        .fade-in-slide-up.is-visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+
         /* Responsive adjustments */
         @media (max-width: 768px) {
             .hero-section {
@@ -256,10 +268,6 @@ $condb->close();
 
             .sm\:grid-cols-2 {
                 grid-template-columns: 1fr;
-            }
-
-            .flex-col.sm\:flex-row {
-                flex-direction: column;
             }
 
             .flex-col.sm\:flex-row>*:not(:last-child) {
@@ -355,26 +363,26 @@ $condb->close();
         <div class="absolute inset-0 bg-cover bg-center" style="background-image: url('../dist/img/cover.png');">
         </div>
 
-        <div class="text-center p-6 md:p-10 rounded-xl shadow-2xl max-w-4xl relative z-10 mx-4 bg-white bg-opacity-0">
-            <h1 class="text-4xl sm:text-5xl md:text-6xl font-extralight mb-4 md:mb-6 leading-tight">
+        <div class="text-center text-white p-6 md:p-10 rounded-xl shadow-2xl max-w-4xl animate-fade-in relative z-10 mx-4">
+            <h1 class="text-4xl sm:text-5xl md:text-6xl font-extralight mb-4 md:mb-6 text-gradient-light drop-shadow-lg leading-tight">
                 พื้นที่ทำงานนักออกแบบ
             </h1>
             <p class="text-base sm:text-lg md:text-xl mb-6 md:mb-8 leading-relaxed opacity-90 font-light">
                 จัดการโครงการของคุณ, ค้นหางานใหม่, และนำเสนอผลงานสู่ผู้ว่าจ้าง
             </p>
-            <div class="space-x-0 sm:space-x-4 flex flex-col sm:flex-row justify-center items-center">
-                <a href="#available-jobs" class="
+            <div class="flex flex-col sm:flex-row justify-center items-center gap-4 sm:gap-4 flex-wrap">
+                <a href="#assigned-jobs" class="
                     bg-emerald-500 text-white
                     px-6 py-3 sm:px-8 sm:py-4
                     text-base sm:text-lg rounded-lg font-semibold
                     shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300
                     w-full sm:w-auto mb-3 sm:mb-0
                     hover:bg-emerald-600 focus:outline-none focus:ring-4 focus:ring-emerald-300
-                    whitespace-nowrap 
+                    whitespace-nowrap
                 ">
-                    <i class="fas fa-tasks mr-2"></i> หางานใหม่
+                    <i class="fas fa-tasks mr-2"></i> งานที่ได้รับมอบหมาย
                 </a>
-                <a href="my_projects.php" class="
+                <a href="#available-jobs" class="
                     bg-blue-500 text-white
                     px-6 py-3 sm:px-8 sm:py-4
                     text-base sm:text-lg rounded-lg font-semibold
@@ -383,9 +391,9 @@ $condb->close();
                     hover:bg-blue-600 focus:outline-none focus:ring-4 focus:ring-blue-300
                     whitespace-nowrap
                 ">
-                    <i class="fas fa-search ml-2"></i> โปรเจกต์ของคุณ
+                    <i class="fas fa-search mr-2"></i> หางานใหม่
                 </a>
-                <a href="post_portfolio.php" class="
+                <a href="my_projects.php" class="
                     bg-gray-200 text-gray-800
                     px-6 py-3 sm:px-8 sm:py-4
                     text-base sm:text-lg rounded-lg font-semibold
@@ -394,18 +402,29 @@ $condb->close();
                     hover:bg-gray-300 focus:outline-none focus:ring-4 focus:ring-gray-300
                     whitespace-nowrap
                 ">
-                    <i class="fas fa-upload ml-2"></i> แชร์ผลงานของคุณ
+                    <i class="fas fa-folder-open mr-2"></i> โปรเจกต์ของฉัน
+                </a>
+                <a href="post_portfolio.php" class="
+                    bg-yellow-500 text-white
+                    px-6 py-3 sm:px-8 sm:py-4
+                    text-base sm:text-lg rounded-lg font-semibold
+                    shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300
+                    w-full sm:w-auto mb-3 sm:mb-0
+                    hover:bg-yellow-600 focus:outline-none focus:ring-4 focus:ring-yellow-300
+                    whitespace-nowrap
+                ">
+                    <i class="fas fa-upload mr-2"></i> แชร์ผลงานของคุณ
                 </a>
                 <a href="create_job_post.php" class="
-                    bg-indigo-600 text-white
+                    bg-purple-600 text-white
                     px-6 py-3 sm:px-8 sm:py-4
                     text-base sm:text-lg rounded-lg font-semibold
                     shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300
                     w-full sm:w-auto
-                    hover:bg-indigo-700 focus:outline-none focus:ring-4 focus:ring-indigo-300
+                    hover:bg-purple-700 focus:outline-none focus:ring-4 focus:ring-purple-300
                     whitespace-nowrap
                 ">
-                    <i class="fas fa-plus-circle mr-2"></i> สร้างโพสต์งานของคุณ
+                    <i class="fas fa-bullhorn mr-2"></i> โพสต์บริการ
                 </a>
             </div>
         </div>
@@ -562,35 +581,43 @@ $condb->close();
             });
         });
 
-        // Optional: Animate cards on scroll (same as index.php)
+        // Animate header content on load
         document.addEventListener('DOMContentLoaded', () => {
-            const cards = document.querySelectorAll('.animate-card-appear');
-            const observerOptions = {
-                root: null,
-                rootMargin: '0px',
-                threshold: 0.1
-            };
+        const heroContent = document.querySelector('.animate-fade-in');
+        heroContent.style.opacity = '0';
+        setTimeout(() => {
+            heroContent.style.transition = 'opacity 1s ease-out';
+            heroContent.style.opacity = '1';
+        }, 100);
 
-            const observer = new IntersectionObserver((entries, observer) => {
-                entries.forEach(entry => {
-                    if (entry.isIntersecting) {
-                        entry.target.style.opacity = '0';
-                        entry.target.style.transform = 'translateY(20px)';
-                        setTimeout(() => {
-                            entry.target.style.transition =
-                                'opacity 0.6s ease-out, transform 0.6s ease-out';
-                            entry.target.style.opacity = '1';
-                            entry.target.style.transform = 'translateY(0)';
-                        }, 200);
-                        observer.unobserve(entry.target);
-                    }
-                });
-            }, observerOptions);
+        // Optional: Animate cards on scroll
+        const cards = document.querySelectorAll('.animate-card-appear');
+        const observerOptions = {
+            root: null,
+            rootMargin: '0px',
+            threshold: 0.1
+        };
 
-            cards.forEach(card => {
-                observer.observe(card);
+        const observer = new IntersectionObserver((entries, observer) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.style.opacity = '0';
+                    entry.target.style.transform = 'translateY(20px)';
+                    setTimeout(() => {
+                        entry.target.style.transition =
+                            'opacity 0.6s ease-out, transform 0.6s ease-out';
+                        entry.target.style.opacity = '1';
+                        entry.target.style.transform = 'translateY(0)';
+                    }, 200); // Slight delay for each card
+                    observer.unobserve(entry.target);
+                }
             });
+        }, observerOptions);
+
+        cards.forEach(card => {
+            observer.observe(card);
         });
+    });
     </script>
 </body>
 
