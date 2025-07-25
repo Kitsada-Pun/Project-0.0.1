@@ -251,14 +251,14 @@ $condb->close();
 
     <nav class="navbar p-4 shadow-md sticky top-0 z-50">
         <div class="container mx-auto flex justify-between items-center">
-            <a href="designer/main.php" class="transition duration-300 hover:opacity-80">
-                <img src="dist/img/logo.png" alt="PixelLink Logo" class="h-12">
+            <a href="index.php" class="transition duration-300 hover:opacity-80">
+                <img src="dist/img/logo.png" alt="PixelLink Logo" class="h-12"> </a>
             </a>
             <div class="space-x-2 sm:space-x-4 flex items-center">
                 <?php if (isset($_SESSION['user_id'])) : ?>
                     <span class="text-gray-700 font-medium">สวัสดี, <?= htmlspecialchars($loggedInUserName) ?>!</span>
 
-                    <a href="view_profile.php?user_id=<?php echo $_SESSION['user_id']; ?>" class="
+                    <a href="designer/view_profile.php?user_id=<?php echo $_SESSION['user_id']; ?>" class="
                         bg-blue-500 text-white
                         px-3 py-1.5 sm:px-5 sm:py-2
                         rounded-lg font-medium
@@ -268,7 +268,7 @@ $condb->close();
                         <i class="fas fa-user-circle mr-1"></i> ดูโปรไฟล์
                     </a>
 
-                    <a href="logout.php" class="
+                    <a href="/logout.php" class="
                         bg-red-500 text-white
                         px-3 py-1.5 sm:px-5 sm:py-2
                         rounded-lg font-medium
@@ -303,7 +303,7 @@ $condb->close();
                                 <i class="fas <?= $job_type === 'posting' ? 'fa-pen-nib' : 'fa-lightbulb' ?> mr-1"></i>
                                 <?= $job_type === 'posting' ? 'ประกาศรับงาน' : 'งานร้องขอ' ?>
                             </span>
-                            <span class="ml-3 text-gray-500">โดย: <a href="profile.php?id=<?= $job_data['owner_id'] ?>" class="font-semibold text-blue-700 hover:underline"><?= htmlspecialchars($job_data['first_name'] . ' ' . $job_data['last_name']) ?></a></span>
+                            <span class="ml-3 text-gray-500">โดย: <a href="designer/view_profile.php?user_id=<?= $job_data['owner_id'] ?>" class="font-semibold text-blue-700 hover:underline"><?= htmlspecialchars($job_data['first_name'] . ' ' . $job_data['last_name']) ?></a></span>
                         </p>
                     </div>
                     <span class="badge-status
@@ -364,23 +364,38 @@ $condb->close();
                     <h2 class="text-2xl font-bold text-gray-800 mb-4">การดำเนินการ</h2>
                     <div class="flex flex-col sm:flex-row justify-center space-y-4 sm:space-y-0 sm:space-x-4">
                         <?php if (isset($_SESSION['user_id'])) : ?>
-                            <?php if ($job_type === 'request' && $_SESSION['user_type'] === 'designer') : ?>
-                                <a href="apply_job.php?request_id=<?= $job_data['id'] ?>" class="btn-action px-8 py-4 rounded-full font-bold shadow-md flex items-center justify-center">
+                            <?php
+                            // ตรวจสอบว่าผู้ใช้ปัจจุบันเป็นเจ้าของงาน/คำร้องขอหรือไม่
+                            $isOwner = (isset($_SESSION['user_id']) && $_SESSION['user_id'] == $job_data['owner_id']);
+                            ?>
+
+                            <a href="designer/view_profile.php?user_id=<?= htmlspecialchars($job_data['owner_id']) ?>" class="btn-primary px-8 py-4 rounded-full font-bold shadow-md flex items-center justify-center whitespace-nowrap">
+                                <i class="fas fa-user-circle mr-2"></i> ดูโปรไฟล์ผู้ประกาศ
+                            </a>
+
+                            <?php if ($job_type === 'request' && $_SESSION['user_type'] === 'designer' && !$isOwner) : ?>
+                                <a href="apply_job.php?request_id=<?= $job_data['id'] ?>" class="btn-action px-8 py-4 rounded-full font-bold shadow-md flex items-center justify-center whitespace-nowrap">
                                     <i class="fas fa-paper-plane mr-2"></i> ยื่นข้อเสนอ
                                 </a>
-                            <?php elseif ($job_type === 'posting' && $_SESSION['user_type'] === 'client') : ?>
-                                <a href="messages.php?to_user=<?= $job_data['owner_id'] ?>" class="btn-action px-8 py-4 rounded-full font-bold shadow-md flex items-center justify-center">
-                                    <i class="fas fa-comment-dots mr-2"></i> ติดต่อผู้ประกาศ
+                            <?php elseif ($job_type === 'posting' && $_SESSION['user_type'] === 'client' && $isOwner) : ?>
+                                <a href="client/edit_job_post.php?post_id=<?= $job_data['id'] ?>" class="btn-action px-8 py-4 rounded-full font-bold shadow-md flex items-center justify-center whitespace-nowrap">
+                                    <i class="fas fa-edit mr-2"></i> จัดการประกาศ
                                 </a>
                             <?php else : ?>
-                                <p class="text-lg text-gray-600">คุณต้องเป็น
-                                    <?php if ($job_type === 'request') echo 'นักออกแบบ'; else echo 'ผู้ว่าจ้าง'; ?>
-                                    เพื่อดำเนินการกับงานนี้
-                                </p>
+                                <?php if ($isOwner) : ?>
+                                    <p class="text-lg text-gray-600">คุณเป็นเจ้าของงานนี้ คุณไม่สามารถยื่นข้อเสนอหรือติดต่อตัวเองได้</p>
+                                <?php else : ?>
+                                    <p class="text-lg text-gray-600">คุณต้องเป็น
+                                        <?php if ($job_type === 'request') echo 'นักออกแบบ'; else echo 'ผู้ว่าจ้าง'; ?>
+                                        เพื่อดำเนินการกับงานนี้
+                                    </p>
+                                <?php endif; ?>
                             <?php endif; ?>
-                            <a href="messages.php?to_user=<?= $job_data['owner_id'] ?>" class="btn-action bg-blue-500 hover:bg-blue-600 px-8 py-4 rounded-full font-bold shadow-md flex items-center justify-center">
-                                <i class="fas fa-comments mr-2"></i> ส่งข้อความถึง <?= htmlspecialchars($job_data['first_name']) ?>
-                            </a>
+                            <?php if (!$isOwner) : ?>
+                                <a href="messages.php?to_user=<?= $job_data['owner_id'] ?>" class="btn-action bg-blue-500 hover:bg-blue-600 px-8 py-4 rounded-full font-bold shadow-md flex items-center justify-center whitespace-nowrap">
+                                    <i class="fas fa-comments mr-2"></i> ส่งข้อความถึง <?= htmlspecialchars($job_data['first_name']) ?>
+                                </a>
+                            <?php endif; ?>
                         <?php else : ?>
                             <p class="text-lg text-gray-600">
                                 <a href="login.php" class="font-semibold text-blue-700 hover:underline">เข้าสู่ระบบ</a> เพื่อยื่นข้อเสนอ หรือติดต่อผู้ประกาศ/ผู้ร้องขอ
@@ -396,7 +411,7 @@ $condb->close();
     <footer class="bg-gray-800 text-gray-300 py-8 mt-auto">
         <div class="container mx-auto px-6 text-center">
             <div class="flex flex-col md:flex-row justify-between items-center mb-6">
-                <a href="index.php" class="text-2xl font-bold text-white mb-4 md:mb-0">PixelLink</a>
+                <a href="../designer/main.php" class="text-2xl font-bold text-white mb-4 md:mb-0">PixelLink</a>
                 <div class="flex space-x-6">
                     <a href="#" class="hover:text-white transition duration-300">เกี่ยวกับเรา</a>
                     <a href="#" class="hover:text-white transition duration-300">ติดต่อเรา</a>
