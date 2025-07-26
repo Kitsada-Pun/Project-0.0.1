@@ -74,7 +74,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $title = $condb->real_escape_string($_POST['title']);
     $description = $condb->real_escape_string($_POST['description']);
     $price_range = $condb->real_escape_string($_POST['price_range']);
-    $category_id = (int)$_POST['category'];
+    $category_id = (int) $_POST['category'];
     $status = 'active'; // สถานะเริ่มต้นของประกาศงานคือ active
     $main_image_id = NULL; // กำหนดค่าเริ่มต้นเป็น NULL เผื่อไม่มีการอัปโหลดรูปภาพ
 
@@ -116,20 +116,20 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     if (move_uploaded_file($file_tmp_name, $upload_path)) {
                         // บันทึกข้อมูลไฟล์ลงในตาราง uploaded_files
                         // ตรวจสอบให้แน่ใจว่า `contract_id` ถูกระบุใน field list และ bind_param
-                        $sql_insert_file = "INSERT INTO uploaded_files (file_path, file_type, file_size, uploaded_by_user_id, uploaded_date, contract_id)
-                                            VALUES (?, ?, ?, ?, NOW(), ?)";
+                        $sql_insert_file = "INSERT INTO uploaded_files (file_path, file_type, file_size, uploader_id, uploaded_by_user_id, uploaded_date, contract_id)
+                             VALUES (?, ?, ?, ?, ?, NOW(), ?)";
                         $stmt_insert_file = $condb->prepare($sql_insert_file);
                         if ($stmt_insert_file) {
                             $contract_id_for_file = NULL; // กำหนดค่าเป็น NULL อย่างชัดเจน
                             // 'ssiisi' -> string (path), string (type), integer (size), integer (user_id), datetime (NOW()), integer (contract_id, can be NULL)
-                            $stmt_insert_file->bind_param("ssisi", $upload_path, $file_type, $file_size, $designer_id, $contract_id_for_file);
-                            
+                            $stmt_insert_file->bind_param("ssiiii", $upload_path, $file_type, $file_size, $designer_id, $designer_id, $contract_id_for_file);
+
                             if ($stmt_insert_file->execute()) { // <<--- บรรทัด 121
                                 $main_image_id = $condb->insert_id; // ได้รับ ID ของไฟล์ที่เพิ่งอัปโหลด
                             } else {
                                 error_log("SQL Execute Error (insert file): " . $stmt_insert_file->error);
                                 $error_message = 'เกิดข้อผิดพลาดในการบันทึกข้อมูลไฟล์: ' . $stmt_insert_file->error;
-                                unlink($upload_path); 
+                                unlink($upload_path);
                             }
                             $stmt_insert_file->close();
                         } else {
@@ -145,20 +145,20 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 $error_message = 'เกิดข้อผิดพลาดในการอัปโหลดรูปภาพ: รหัสข้อผิดพลาด ' . $_FILES['main_image']['error'];
             }
         }
-        
+
 
         // หากไม่มีข้อผิดพลาดจากการอัปโหลดรูปภาพ (หรือไม่มีการอัปโหลดเลย) ให้บันทึกโพสต์งาน
         if (empty($error_message)) {
             $sql_insert = "INSERT INTO job_postings (designer_id, title, description, category_id, price_range, posted_date, status, main_image_id)
                            VALUES (?, ?, ?, ?, ?, NOW(), ?, ?)";
-            
+
             $stmt_insert = $condb->prepare($sql_insert);
             if ($stmt_insert === false) {
                 error_log("SQL Prepare Error (insert job post): " . $condb->error);
                 $error_message = 'เกิดข้อผิดพลาดในการเตรียมคำสั่ง: ' . $condb->error;
             } else {
                 $stmt_insert->bind_param("ississi", $designer_id, $title, $description, $category_id, $price_range, $status, $main_image_id);
-                
+
                 if ($stmt_insert->execute()) {
                     $success_message = 'โพสต์ประกาศงานของคุณสำเร็จแล้ว!';
                     // Redirect ไปหน้า main.php หลังจากบันทึกสำเร็จ
@@ -178,6 +178,7 @@ $condb->close();
 ?>
 <!DOCTYPE html>
 <html lang="th">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -193,44 +194,52 @@ $condb->close();
             font-style: normal;
             font-weight: 400;
         }
+
         body {
             background: linear-gradient(135deg, #f0f4f8 0%, #e8edf3 100%);
             color: #2c3e50;
             overflow-x: hidden;
         }
+
         .navbar {
             background-color: rgba(255, 255, 255, 0.9);
             backdrop-filter: blur(10px);
             -webkit-backdrop-filter: blur(10px);
             border-bottom: 1px solid rgba(0, 0, 0, 0.05);
         }
+
         .btn-primary {
             background: linear-gradient(45deg, #0a5f97 0%, #0d96d2 100%);
             color: white;
             transition: all 0.3s ease;
             box-shadow: 0 4px 15px rgba(13, 150, 210, 0.3);
         }
+
         .btn-primary:hover {
             background: linear-gradient(45deg, #0d96d2 0%, #0a5f97 100%);
             transform: translateY(-2px);
             box-shadow: 0 6px 20px rgba(13, 150, 210, 0.5);
         }
+
         .btn-secondary {
             background-color: #6c757d;
             color: white;
             transition: all 0.3s ease;
             box-shadow: 0 4px 10px rgba(108, 117, 125, 0.2);
         }
+
         .btn-secondary:hover {
             background-color: #5a6268;
             transform: translateY(-2px);
             box-shadow: 0 6px 15px rgba(108, 117, 125, 0.4);
         }
+
         .text-gradient {
             background: linear-gradient(45deg, #0a5f97, #0d96d2);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
+
         .pixellink-logo {
             font-weight: 700;
             font-size: 2.25rem;
@@ -238,6 +247,7 @@ $condb->close();
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
+
         .pixellink-logo b {
             color: #0d96d2;
         }
@@ -253,9 +263,12 @@ $condb->close();
         }
 
         /* Input/Textarea focus styles */
-        input:focus, textarea:focus, select:focus {
+        input:focus,
+        textarea:focus,
+        select:focus {
             outline: none;
-            border-color: #0d96d2; /* Accent blue */
+            border-color: #0d96d2;
+            /* Accent blue */
             box-shadow: 0 0 0 3px rgba(13, 150, 210, 0.2);
         }
 
@@ -263,8 +276,10 @@ $condb->close();
         .image-preview-container {
             width: 100%;
             height: 200px;
-            background-color: #e2e8f0; /* gray-200 */
-            border: 2px dashed #94a3b8; /* slate-400 */
+            background-color: #e2e8f0;
+            /* gray-200 */
+            border: 2px dashed #94a3b8;
+            /* slate-400 */
             border-radius: 0.5rem;
             display: flex;
             justify-content: center;
@@ -272,18 +287,23 @@ $condb->close();
             overflow: hidden;
             position: relative;
         }
+
         .image-preview-container img {
             width: 100%;
             height: 100%;
-            object-fit: contain; /* Show entire image without cropping */
+            object-fit: contain;
+            /* Show entire image without cropping */
         }
+
         .image-preview-container .placeholder-text {
-            color: #64748b; /* slate-600 */
+            color: #64748b;
+            /* slate-600 */
             font-size: 1rem;
             text-align: center;
         }
     </style>
 </head>
+
 <body class="flex flex-col min-h-screen">
 
     <nav class="navbar p-4 shadow-md sticky top-0 z-50">
@@ -320,7 +340,8 @@ $condb->close();
     <main class="flex-grow container mx-auto px-4 py-8 md:py-12 flex items-center justify-center">
         <div class="form-container w-full max-w-2xl p-8 md:p-10">
             <h2 class="text-3xl font-bold text-gray-800 mb-6 text-center text-gradient">สร้างโพสต์งานของคุณ</h2>
-            <p class="text-center text-gray-600 mb-8">ประกาศบริการหรือผลงานของคุณ เพื่อให้ผู้ว่าจ้างเห็นและติดต่อคุณได้</p>
+            <p class="text-center text-gray-600 mb-8">ประกาศบริการหรือผลงานของคุณ เพื่อให้ผู้ว่าจ้างเห็นและติดต่อคุณได้
+            </p>
 
             <?php if ($success_message): ?>
                 <script>
@@ -349,20 +370,23 @@ $condb->close();
                 <div>
                     <label for="title" class="block text-gray-700 text-lg font-semibold mb-2">ชื่องาน/บริการ:</label>
                     <input type="text" id="title" name="title" placeholder="เช่น ออกแบบโลโก้, รับวาดภาพประกอบ"
-                        class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" required>
+                        class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                        required>
                 </div>
 
                 <div>
                     <label for="description" class="block text-gray-700 text-lg font-semibold mb-2">รายละเอียด:</label>
                     <textarea id="description" name="description" rows="6"
                         placeholder="อธิบายเกี่ยวกับบริการของคุณให้ชัดเจนและน่าสนใจ"
-                        class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" required></textarea>
+                        class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                        required></textarea>
                 </div>
 
                 <div>
                     <label for="category" class="block text-gray-700 text-lg font-semibold mb-2">หมวดหมู่:</label>
                     <select id="category" name="category"
-                        class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" required>
+                        class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                        required>
                         <option value="">-- เลือกหมวดหมู่ --</option>
                         <?php foreach ($categories as $cat): ?>
                             <option value="<?= htmlspecialchars($cat['category_id']) ?>">
@@ -373,22 +397,27 @@ $condb->close();
                 </div>
 
                 <div>
-                    <label for="price_range" class="block text-gray-700 text-lg font-semibold mb-2">ช่วงราคา (โดยประมาณ):</label>
-                    <input type="text" id="price_range" name="price_range" placeholder="เช่น 1,500 - 3,000 บาท, เริ่มต้น 500 บาท"
-                        class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" required>
+                    <label for="price_range" class="block text-gray-700 text-lg font-semibold mb-2">ช่วงราคา
+                        (โดยประมาณ):</label>
+                    <input type="text" id="price_range" name="price_range"
+                        placeholder="เช่น 1,500 - 3,000 บาท, เริ่มต้น 500 บาท"
+                        class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                        required>
                 </div>
 
                 <div>
-                    <label for="main_image" class="block text-gray-700 text-lg font-semibold mb-2">แนบภาพประกอบ (หลัก):</label>
+                    <label for="main_image" class="block text-gray-700 text-lg font-semibold mb-2">แนบภาพประกอบ
+                        (หลัก):</label>
                     <div class="image-preview-container mb-4" id="imagePreviewContainer">
-                        <span class="placeholder-text"><i class="fas fa-camera text-4xl mb-2"></i><br>คลิกหรือลากรูปภาพมาวางที่นี่</span>
+                        <span class="placeholder-text"><i
+                                class="fas fa-camera text-4xl mb-2"></i><br>คลิกหรือลากรูปภาพมาวางที่นี่</span>
                         <img id="imagePreview" src="#" alt="Image Preview" class="hidden">
                     </div>
                     <input type="file" id="main_image" name="main_image" accept="image/*"
                         class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer">
                     <p class="text-sm text-gray-500 mt-2">รองรับ JPG, PNG, GIF. สูงสุด 5MB.</p>
                 </div>
-                
+
                 <div class="flex justify-center">
                     <button type="submit" class="
                         btn-primary
@@ -426,17 +455,17 @@ $condb->close();
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
         // Image preview script
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', function () {
             const fileInput = document.getElementById('main_image');
             const imagePreview = document.getElementById('imagePreview');
             const imagePreviewContainer = document.getElementById('imagePreviewContainer');
             const placeholderText = imagePreviewContainer.querySelector('.placeholder-text');
 
-            fileInput.addEventListener('change', function(event) {
+            fileInput.addEventListener('change', function (event) {
                 const file = event.target.files[0];
                 if (file) {
                     const reader = new FileReader();
-                    reader.onload = function(e) {
+                    reader.onload = function (e) {
                         imagePreview.src = e.target.result;
                         imagePreview.classList.remove('hidden');
                         placeholderText.classList.add('hidden');
@@ -477,4 +506,5 @@ $condb->close();
         });
     </script>
 </body>
+
 </html>
