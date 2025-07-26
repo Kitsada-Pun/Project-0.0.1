@@ -2,7 +2,7 @@
 session_start();
 date_default_timezone_set('Asia/Bangkok');
 
-// ตรวจสอบว่าผู้ใช้ล็อกอินอยู่หรือไม่ และเป็น 'designer'
+// ตรวจสอบว่าผู้ใช้ล็อกอินอยู่หรือไม่
 if (!isset($_SESSION['user_id']) || $_SESSION['user_type'] !== 'designer') {
     // ถ้าไม่ได้ล็อกอินหรือไม่ใช่ designer ให้เปลี่ยนเส้นทางไปหน้า login
     header("Location: ../login.php");
@@ -22,18 +22,12 @@ if ($condb->connect_error) {
 }
 $condb->set_charset("utf8mb4");
 
+// ดึงข้อมูลผู้ใช้ปัจจุบัน (Designer)
 $designer_id = $_SESSION['user_id'];
-$success_message = '';
-$error_message = '';
-$categories = [];
-
-// --- ดึงข้อมูลผู้ใช้ปัจจุบัน (Designer) สำหรับแสดงผลใน Navbar ---
 $designer_name = ''; // กำหนดค่าเริ่มต้นให้เป็นสตริงว่างเปล่า
+// เพิ่มการตรวจสอบและดึงชื่อผู้ใช้ให้ครบถ้วนและมั่นใจว่ามีค่า
 if (isset($_SESSION['user_id'])) {
-    // พยายามดึงชื่อจากเซสชันก่อน
     $designer_name = $_SESSION['username'] ?? $_SESSION['full_name'] ?? '';
-
-    // หากยังไม่มีชื่อในเซสชัน หรือต้องการอัปเดตข้อมูลล่าสุด
     if (empty($designer_name)) {
         $sql_designer_info = "SELECT first_name, last_name, username FROM users WHERE user_id = ?";
         $stmt_designer_info = $condb->prepare($sql_designer_info);
@@ -44,10 +38,9 @@ if (isset($_SESSION['user_id'])) {
             if ($result_designer_info->num_rows === 1) {
                 $info = $result_designer_info->fetch_assoc();
                 $designer_name = trim($info['first_name'] . ' ' . $info['last_name']);
-                if (empty($designer_name)) { // ถ้า first_name/last_name ว่างเปล่า ให้ใช้ username
+                if (empty($designer_name)) {
                     $designer_name = $info['username'];
                 }
-                // อัปเดตเซสชันด้วยข้อมูลที่ดึงมา
                 $_SESSION['first_name'] = $info['first_name'];
                 $_SESSION['last_name'] = $info['last_name'];
                 $_SESSION['username'] = $info['username'];
@@ -59,8 +52,11 @@ if (isset($_SESSION['user_id'])) {
         }
     }
 }
-// ---------------------------------------------------------------
 
+
+$success_message = '';
+$error_message = '';
+$categories = [];
 
 // ดึงหมวดหมู่งานจากฐานข้อมูล
 $sql_categories = "SELECT category_id, category_name FROM job_categories ORDER BY category_name";
@@ -87,59 +83,69 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $error_message = 'กรุณากรอกข้อมูลหลักให้ครบถ้วน';
     } else {
         // --- ส่วนจัดการการอัปโหลดรูปภาพ ---
-        if (isset($_FILES['main_image']) && $_FILES['main_image']['error'] == UPLOAD_ERR_OK) {
-            $file_tmp_name = $_FILES['main_image']['tmp_name'];
-            $file_name = $_FILES['main_image']['name'];
-            $file_size = $_FILES['main_image']['size'];
-            $file_type = $_FILES['main_image']['type'];
-            $file_ext = strtolower(pathinfo($file_name, PATHINFO_EXTENSION));
+        // ตรวจสอบว่า designer_id เป็นค่าที่ถูกต้องและมีอยู่ในฐานข้อมูล users ก่อนอัปโหลดไฟล์
+        // การตรวจสอบนี้ช่วยป้องกัน Foreign Key Error uploaded_files_ibfk_2
+        if (!isset($designer_id) || $designer_id <= 0) {
+            $error_message = 'ไม่พบข้อมูลผู้ใช้งานที่ถูกต้อง กรุณาล็อกอินใหม่';
+        } else {
+            // โค้ดส่วนนี้จะรันเมื่อ designer_id มีค่าถูกต้องเท่านั้น
+            if (isset($_FILES['main_image']) && $_FILES['main_image']['error'] == UPLOAD_ERR_OK) {
+                $file_tmp_name = $_FILES['main_image']['tmp_name'];
+                $file_name = $_FILES['main_image']['name'];
+                $file_size = $_FILES['main_image']['size'];
+                $file_type = $_FILES['main_image']['type'];
+                $file_ext = strtolower(pathinfo($file_name, PATHINFO_EXTENSION));
 
-            $allowed_ext = ['jpg', 'jpeg', 'png', 'gif'];
-            $max_file_size = 5 * 1024 * 1024; // 5MB
+                $allowed_ext = ['jpg', 'jpeg', 'png', 'gif'];
+                $max_file_size = 5 * 1024 * 1024; // 5MB
 
-            if (!in_array($file_ext, $allowed_ext)) {
-                $error_message = 'อนุญาตเฉพาะไฟล์รูปภาพ (JPG, JPEG, PNG, GIF) เท่านั้น';
-            } elseif ($file_size > $max_file_size) {
-                $error_message = 'ขนาดไฟล์รูปภาพต้องไม่เกิน 5MB';
-            } else {
-                // สร้างชื่อไฟล์ที่ไม่ซ้ำกัน
-                $new_file_name = uniqid('job_img_') . '.' . $file_ext;
-                $upload_dir = '../uploads/job_images/'; // โฟลเดอร์สำหรับเก็บรูปภาพงาน (ต้องสร้างโฟลเดอร์นี้)
-                $upload_path = $upload_dir . $new_file_name;
-
-                if (!is_dir($upload_dir)) {
-                    mkdir($upload_dir, 0777, true); // สร้างโฟลเดอร์ถ้าไม่มี
-                }
-
-                if (move_uploaded_file($file_tmp_name, $upload_path)) {
-                    // บันทึกข้อมูลไฟล์ลงในตาราง uploaded_files
-                    $sql_insert_file = "INSERT INTO uploaded_files (file_path, file_type, file_size, uploaded_by_user_id, uploaded_date)
-                                        VALUES (?, ?, ?, ?, NOW())";
-                    $stmt_insert_file = $condb->prepare($sql_insert_file);
-                    if ($stmt_insert_file) {
-                        $stmt_insert_file->bind_param("ssii", $upload_path, $file_type, $file_size, $designer_id);
-                        if ($stmt_insert_file->execute()) {
-                            $main_image_id = $condb->insert_id; // ได้รับ ID ของไฟล์ที่เพิ่งอัปโหลด
-                        } else {
-                            error_log("SQL Execute Error (insert file): " . $stmt_insert_file->error);
-                            $error_message = 'เกิดข้อผิดพลาดในการบันทึกข้อมูลไฟล์: ' . $stmt_insert_file->error;
-                            // ลบไฟล์ที่อัปโหลดไปแล้วออกหากบันทึก DB ไม่สำเร็จ
-                            unlink($upload_path); 
-                        }
-                        $stmt_insert_file->close();
-                    } else {
-                        error_log("SQL Prepare Error (insert file): " . $condb->error);
-                        $error_message = 'เกิดข้อผิดพลาดในการเตรียมคำสั่งไฟล์: ' . $condb->error;
-                        unlink($upload_path);
-                    }
+                if (!in_array($file_ext, $allowed_ext)) {
+                    $error_message = 'อนุญาตเฉพาะไฟล์รูปภาพ (JPG, JPEG, PNG, GIF) เท่านั้น';
+                } elseif ($file_size > $max_file_size) {
+                    $error_message = 'ขนาดไฟล์รูปภาพต้องไม่เกิน 5MB';
                 } else {
-                    $error_message = 'ไม่สามารถอัปโหลดไฟล์รูปภาพได้';
+                    // สร้างชื่อไฟล์ที่ไม่ซ้ำกัน
+                    $new_file_name = uniqid('job_img_') . '.' . $file_ext;
+                    $upload_dir = '../uploads/job_images/'; // โฟลเดอร์สำหรับเก็บรูปภาพงาน (ต้องสร้างโฟลเดอร์นี้)
+                    $upload_path = $upload_dir . $new_file_name;
+
+                    if (!is_dir($upload_dir)) {
+                        mkdir($upload_dir, 0777, true); // สร้างโฟลเดอร์ถ้าไม่มี
+                    }
+
+                    if (move_uploaded_file($file_tmp_name, $upload_path)) {
+                        // บันทึกข้อมูลไฟล์ลงในตาราง uploaded_files
+                        // ตรวจสอบให้แน่ใจว่า `contract_id` ถูกระบุใน field list และ bind_param
+                        $sql_insert_file = "INSERT INTO uploaded_files (file_path, file_type, file_size, uploaded_by_user_id, uploaded_date, contract_id)
+                                            VALUES (?, ?, ?, ?, NOW(), ?)";
+                        $stmt_insert_file = $condb->prepare($sql_insert_file);
+                        if ($stmt_insert_file) {
+                            $contract_id_for_file = NULL; // กำหนดค่าเป็น NULL อย่างชัดเจน
+                            // 'ssiisi' -> string (path), string (type), integer (size), integer (user_id), datetime (NOW()), integer (contract_id, can be NULL)
+                            $stmt_insert_file->bind_param("ssisi", $upload_path, $file_type, $file_size, $designer_id, $contract_id_for_file);
+                            
+                            if ($stmt_insert_file->execute()) { // <<--- บรรทัด 121
+                                $main_image_id = $condb->insert_id; // ได้รับ ID ของไฟล์ที่เพิ่งอัปโหลด
+                            } else {
+                                error_log("SQL Execute Error (insert file): " . $stmt_insert_file->error);
+                                $error_message = 'เกิดข้อผิดพลาดในการบันทึกข้อมูลไฟล์: ' . $stmt_insert_file->error;
+                                unlink($upload_path); 
+                            }
+                            $stmt_insert_file->close();
+                        } else {
+                            error_log("SQL Prepare Error (insert file): " . $condb->error);
+                            $error_message = 'เกิดข้อผิดพลาดในการเตรียมคำสั่งไฟล์: ' . $condb->error;
+                            unlink($upload_path);
+                        }
+                    } else {
+                        $error_message = 'ไม่สามารถอัปโหลดไฟล์รูปภาพได้';
+                    }
                 }
+            } elseif (isset($_FILES['main_image']) && $_FILES['main_image']['error'] != UPLOAD_ERR_NO_FILE) {
+                $error_message = 'เกิดข้อผิดพลาดในการอัปโหลดรูปภาพ: รหัสข้อผิดพลาด ' . $_FILES['main_image']['error'];
             }
-        } elseif (isset($_FILES['main_image']) && $_FILES['main_image']['error'] != UPLOAD_ERR_NO_FILE) {
-             // จัดการข้อผิดพลาดอื่นๆ ที่ไม่ใช่ UPLOAD_ERR_NO_FILE (เช่น ไฟล์ใหญ่เกินไป, บางส่วนถูกอัปโหลด)
-            $error_message = 'เกิดข้อผิดพลาดในการอัปโหลดรูปภาพ: รหัสข้อผิดพลาด ' . $_FILES['main_image']['error'];
         }
+        
 
         // หากไม่มีข้อผิดพลาดจากการอัปโหลดรูปภาพ (หรือไม่มีการอัปโหลดเลย) ให้บันทึกโพสต์งาน
         if (empty($error_message)) {
@@ -151,13 +157,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 error_log("SQL Prepare Error (insert job post): " . $condb->error);
                 $error_message = 'เกิดข้อผิดพลาดในการเตรียมคำสั่ง: ' . $condb->error;
             } else {
-                // 'ississi' -> integer, string, string, integer, string, integer
-                // ตอนนี้เพิ่ม main_image_id เข้าไป ต้องเป็น 'ississsi' หรือ 'issisi' ถ้า main_image_id เป็น NULL
-                // ถ้า main_image_id เป็น INT NULL ก็ใช้ 'issisi' สำหรับ bind_param
-                // $main_image_id เป็น INT หรือ NULL
-                // ใน bind_param 's' สำหรับ string, 'i' สำหรับ integer, 'd' สำหรับ double, 'b' สำหรับ blob
-                // สำหรับ NULL ต้องส่ง 'i' แต่ค่าต้องเป็น NULL, ซึ่ง bind_param ทำได้
-                $stmt_insert->bind_param("issisi", $designer_id, $title, $description, $category_id, $price_range, $status, $main_image_id);
+                $stmt_insert->bind_param("ississi", $designer_id, $title, $description, $category_id, $price_range, $status, $main_image_id);
                 
                 if ($stmt_insert->execute()) {
                     $success_message = 'โพสต์ประกาศงานของคุณสำเร็จแล้ว!';
