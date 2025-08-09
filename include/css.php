@@ -1,4 +1,4 @@
-<style>
+
         * { font-family: 'Kanit', sans-serif; font-style: normal; font-weight: 400; }
         body { background: linear-gradient(135deg, #f0f4f8 0%, #e8edf3 100%); color: #2c3e50; overflow-x: hidden; }
         .navbar { background-color: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-bottom: 1px solid rgba(0, 0, 0, 0.05); }
@@ -47,4 +47,3 @@
         .card-item { padding: 0.75rem; }
         .card-image { height: 120px; }
     }
-    </style>
