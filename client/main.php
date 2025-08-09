@@ -20,19 +20,22 @@ $condb->set_charset("utf8mb4");
 $client_id = $_SESSION['user_id'];
 $client_name = $_SESSION['full_name'] ?? $_SESSION['username'] ?? 'Client';
 
-// --- ดึงข้อมูลนักออกแบบแนะนำ (สุ่มมา 8 คน) ---
+// --- ดึงข้อมูลหมวดหมู่งานยอดนิยม (สุ่มมา 6 หมวด) ---
+$job_categories = [];
+$sql_categories = "SELECT category_id, category_name FROM job_categories ORDER BY RAND() LIMIT 6";
+$result_categories = $condb->query($sql_categories);
+if ($result_categories) {
+    $job_categories = $result_categories->fetch_all(MYSQLI_ASSOC);
+}
+
+// --- ดึงข้อมูลนักออกแบบแนะนำ (สุ่มมา 4 คน) ---
 $featured_designers = [];
-$sql_designers = "SELECT 
-                    u.user_id, 
-                    u.first_name, 
-                    u.last_name, 
-                    p.skills, 
-                    p.profile_picture_url 
+$sql_designers = "SELECT
+                    u.user_id, u.first_name, u.last_name, p.skills, p.profile_picture_url
                   FROM users u
                   JOIN profiles p ON u.user_id = p.user_id
                   WHERE u.user_type = 'designer' AND u.is_approved = 1
-                  ORDER BY RAND()
-                  LIMIT 8"; // เพิ่มจำนวนที่แสดงผล
+                  ORDER BY RAND() LIMIT 4";
 $result_designers = $condb->query($sql_designers);
 if ($result_designers) {
     $featured_designers = $result_designers->fetch_all(MYSQLI_ASSOC);
@@ -65,38 +68,59 @@ $condb->close();
             <a href="main.php"><img src="../dist/img/logo.png" alt="PixelLink Logo" class="h-12 transition-transform hover:scale-105"></a>
             <div class="space-x-4 flex items-center">
                 <span class="font-medium text-slate-700">สวัสดี, <?= htmlspecialchars($client_name) ?>!</span>
+                <a href="edit_profile.php" class="text-slate-600 hover:text-blue-600 transition-colors">จัดการโปรไฟล์</a>
                 <a href="../logout.php" class="btn-danger text-white px-5 py-2 rounded-lg font-medium shadow-md">ออกจากระบบ</a>
             </div>
         </div>
     </nav>
 
     <main class="flex-grow">
-        <header class="bg-gradient-to-r from-blue-50 to-indigo-50 py-16">
+        <header class="bg-gradient-to-r from-blue-50 to-indigo-50 py-20">
             <div class="container mx-auto px-4 text-center">
                 <h1 class="text-4xl md:text-5xl font-bold text-slate-800">ค้นหานักออกแบบมืออาชีพ</h1>
-                <p class="mt-4 text-lg text-slate-600">เริ่มต้นโปรเจกต์ของคุณกับฟรีแลนซ์มากฝีมือได้ที่นี่</p>
-                
+                <p class="mt-4 text-lg text-slate-600 max-w-2xl mx-auto">เริ่มต้นโปรเจกต์ของคุณกับฟรีแลนซ์มากฝีมือจากหลากหลายหมวดหมู่ที่เราคัดสรรมาเพื่อคุณ</p>
                 <div class="mt-8">
-                    <a href="../job_listings.php?type=designers" class="inline-block bg-white px-10 py-4 rounded-xl shadow-lg hover:shadow-2xl transition-shadow text-left">
-                        <div class="flex items-center space-x-6">
-                             <div class="bg-green-100 p-4 rounded-full">
-                                <i class="fas fa-search fa-2x text-green-600"></i>
-                            </div>
-                            <div>
-                                <h2 class="text-2xl font-bold text-slate-800">ค้นหานักออกแบบ</h2>
-                                <p class="text-slate-500 mt-1">ดูโปรไฟล์และผลงานของนักออกแบบทั้งหมด</p>
-                            </div>
-                        </div>
+                    <a href="browse_designers.php" class="btn-primary text-white px-10 py-4 rounded-lg font-semibold shadow-lg text-lg">
+                        <i class="fas fa-search mr-2"></i> ค้นหานักออกแบบทั้งหมด
                     </a>
                 </div>
-
             </div>
         </header>
 
-        <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-12 -mt-16">
             
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-12">
+                <a href="#" class="bg-white p-6 rounded-xl shadow-lg hover:shadow-2xl transition-shadow text-center">
+                    <i class="fas fa-comments fa-2x text-sky-500"></i>
+                    <h3 class="mt-2 font-semibold text-slate-700">แชทพูดคุย</h3>
+                </a>
+                <a href="#" class="bg-white p-6 rounded-xl shadow-lg hover:shadow-2xl transition-shadow text-center">
+                    <i class="fas fa-wallet fa-2x text-emerald-500"></i>
+                    <h3 class="mt-2 font-semibold text-slate-700">การชำระเงิน</h3>
+                </a>
+                <a href="#" class="bg-white p-6 rounded-xl shadow-lg hover:shadow-2xl transition-shadow text-center">
+                    <i class="fas fa-star fa-2x text-amber-500"></i>
+                    <h3 class="mt-2 font-semibold text-slate-700">รีวิว</h3>
+                </a>
+                <a href="#" class="bg-white p-6 rounded-xl shadow-lg hover:shadow-2xl transition-shadow text-center">
+                    <i class="fas fa-exclamation-triangle fa-2x text-red-500"></i>
+                    <h3 class="mt-2 font-semibold text-slate-700">รายงานปัญหา</h3>
+                </a>
+            </div>
+
+            <div class="mb-12">
+                <h2 class="text-3xl font-bold text-slate-800 mb-6">ค้นหาตามหมวดหมู่งาน</h2>
+                <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                    <?php foreach($job_categories as $cat): ?>
+                        <a href="browse_designers.php?category=<?= $cat['category_id'] ?>" class="bg-white p-6 rounded-xl shadow-lg hover:shadow-2xl transition-shadow text-center font-semibold text-slate-700 hover:text-blue-600">
+                            <?= htmlspecialchars($cat['category_name']) ?>
+                        </a>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+
             <div>
-                <h2 class="text-3xl font-bold text-slate-800 mb-6 text-center">นักออกแบบแนะนำ</h2>
+                <h2 class="text-3xl font-bold text-slate-800 mb-6">นักออกแบบแนะนำ</h2>
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
                     <?php foreach ($featured_designers as $designer): ?>
                     <a href="../designer/view_profile.php?user_id=<?= $designer['user_id'] ?>" class="block bg-white rounded-xl shadow-lg hover:shadow-2xl transition-shadow text-center p-6">
